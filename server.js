@@ -28,13 +28,19 @@ function assignRoles() {
     });
 
     io.emit("gameStarted", players); // Notify all players that the game has started
+
+    // Find Sipahi & prompt them to guess
+    const sipahi = playerIds.find(id => players[id].role === "Sipahi");
+    if (sipahi) {
+        io.to(sipahi).emit("yourTurnToGuess"); // Tell Sipahi it's their turn
+    }
 }
 
 io.on("connection", (socket) => {
     console.log(`✅ Player connected: ${socket.id}`);
 
     socket.on("joinGame", (playerName, callback) => {
-        console.log(`🟢 Received joinGame event for: ${playerName} (Socket ID: ${socket.id})`);
+        console.log(`🟢 ${playerName} joined the game`);
 
         if (Object.keys(players).length < 4) {
             players[socket.id] = {
@@ -44,17 +50,32 @@ io.on("connection", (socket) => {
                 points: 0
             };
 
-            io.emit("updatePlayers", players); // Broadcast player list
-            callback({ success: true, message: "Joined successfully!" });
+            io.emit("updatePlayers", players);
+            callback({ success: true });
 
-            // ✅ Start game when 4 players join
             if (Object.keys(players).length === 4) {
-                console.log("🎮 4 Players Joined! Starting the Game...");
+                console.log("🎮 4 Players Joined! Assigning roles...");
                 assignRoles();
             }
         } else {
-            console.log("❌ Game is full!");
-            callback({ success: false, message: "Game is full! Try again later." });
+            callback({ success: false, message: "Game is full!" });
+        }
+    });
+
+    // ✅ Handling Sipahi's Guess
+    socket.on("sipahiGuess", (guessedPlayerId) => {
+        const sipahiId = Object.keys(players).find(id => players[id].role === "Sipahi");
+        const chorId = Object.keys(players).find(id => players[id].role === "Chor");
+
+        if (!sipahiId || !chorId) return;
+
+        if (guessedPlayerId === chorId) {
+            console.log("✅ Sipahi guessed correctly!");
+            io.emit("roundResult", { success: true, players });
+        } else {
+            console.log("❌ Wrong guess! Swapping points between Chor & Sipahi...");
+            [players[sipahiId].points, players[chorId].points] = [players[chorId].points, players[sipahiId].points];
+            io.emit("roundResult", { success: false, players });
         }
     });
 
@@ -70,5 +91,5 @@ app.get("/", (req, res) => {
 });
 
 server.listen(5000, () => {
-    console.log("🚀 Server is running on port 5000");
+    console.log("🚀 Server running on port 5000");
 });
