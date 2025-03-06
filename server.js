@@ -19,23 +19,25 @@ const players = {}; // Stores player data
 io.on("connection", (socket) => {
     console.log(`✅ Player connected: ${socket.id}`);
 
-    socket.on("joinGame", (playerName) => {
-        console.log(`🟢 Player Joined: ${playerName} (${socket.id})`);
+  socket.on("joinGame", (playerName) => {
+    console.log(`🟢 Received joinGame event for: ${playerName} (Socket ID: ${socket.id})`);
+    
+    if (Object.keys(players).length < 4) {
+        players[socket.id] = {
+            id: socket.id,
+            name: playerName,
+            role: "",
+            points: 0
+        };
 
-        if (Object.keys(players).length < 4) {
-            players[socket.id] = {
-                id: socket.id,
-                name: playerName,
-                role: "",
-                points: 0
-            };
+        io.emit("updatePlayers", players); // Broadcast to all players
+        socket.emit("joinedSuccessfully", { playerName, playerId: socket.id });
+    } else {
+        console.log("❌ Game is full!");
+        socket.emit("gameFull", "Game is full! Try again later.");
+    }
+});
 
-            io.emit("updatePlayers", players); // Broadcast to all players
-            socket.emit("joinedSuccessfully", { playerName, playerId: socket.id });
-        } else {
-            socket.emit("gameFull", "❌ Game is full! Try again later.");
-        }
-    });
 
     socket.on("disconnect", () => {
         console.log(`❌ Player disconnected: ${socket.id}`);
