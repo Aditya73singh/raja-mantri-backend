@@ -20,8 +20,6 @@ const points = { Raja: 800, Mantri: 900, Chor: 0, Sipahi: 1000 }; // Updated poi
 let currentRound = 0;
 const TOTAL_ROUNDS = 7;
 let gameInProgress = false;
-let sipahiTimerId = null; // Timer ID for Sipahi's turn
-const SIPAHI_GUESS_TIME = 30; // 30 seconds to make a guess
 
 function assignRoles() {
     const playerIds = Object.keys(players);
@@ -59,56 +57,7 @@ function assignRoles() {
     const sipahiId = playerIds.find(id => players[id].role === "Sipahi");
     
     if (sipahiId) {
-        // Start a 30 second timer for Sipahi
-        io.emit("sipahiTurnStarted", { time: SIPAHI_GUESS_TIME }); // Notify all players
         io.to(sipahiId).emit("yourTurnToGuess"); // Tell Sipahi it's their turn
-        
-        // Clear any existing timer
-        if (sipahiTimerId) clearTimeout(sipahiTimerId);
-        
-        // Start countdown timer
-        let timeLeft = SIPAHI_GUESS_TIME;
-        const countdownInterval = setInterval(() => {
-            timeLeft -= 1;
-            io.emit("sipahiTimeUpdate", { timeLeft });
-            
-            if (timeLeft <= 0) {
-                clearInterval(countdownInterval);
-            }
-        }, 1000);
-        
-        // Set timeout for auto-fail if Sipahi doesn't guess
-        sipahiTimerId = setTimeout(() => {
-            const chorId = playerIds.find(id => players[id].role === "Chor");
-            
-            // If time runs out, Sipahi fails automatically
-            calculateRoundPoints(false); // false means incorrect guess
-            
-            clearInterval(countdownInterval);
-            
-            // Reveal all roles and points for this round
-            const roundResults = {};
-            Object.keys(players).forEach(id => {
-                roundResults[id] = {
-                    id: players[id].id,
-                    name: players[id].name,
-                    role: players[id].role,
-                    currentPoints: players[id].currentPoints,
-                    totalPoints: players[id].totalPoints
-                };
-            });
-            
-            io.emit("roundResult", { 
-                success: false, 
-                players: roundResults,
-                message: "⏱️ Time's up! Sipahi didn't guess in time. Points go to Chor!"
-            });
-            
-            // Wait a bit before starting next round
-            setTimeout(() => {
-                startNextRound();
-            }, 5000);
-        }, SIPAHI_GUESS_TIME * 1000);
     }
 }
 
@@ -221,12 +170,6 @@ io.on("connection", (socket) => {
 
         if (!sipahiId || !chorId || socket.id !== sipahiId) return;
 
-        // Clear the timer when Sipahi makes a guess
-        if (sipahiTimerId) {
-            clearTimeout(sipahiTimerId);
-            sipahiTimerId = null;
-        }
-
         const correctGuess = guessedPlayerId === chorId;
         
         calculateRoundPoints(correctGuess);
@@ -266,12 +209,6 @@ io.on("connection", (socket) => {
             io.emit("gameCancelled", { message: "A player disconnected. Game cancelled." });
             gameInProgress = false;
             currentRound = 0;
-            
-            // Clear any active timer
-            if (sipahiTimerId) {
-                clearTimeout(sipahiTimerId);
-                sipahiTimerId = null;
-            }
         }
         
         io.emit("updatePlayers", Object.values(players).map(p => ({ 
